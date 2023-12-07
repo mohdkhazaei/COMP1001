@@ -113,6 +113,26 @@ void routine2(float alpha, float beta) {
 
 }
 
+void routine1_vec(float alpha, float beta) {
+
+    unsigned int i;
+    __m128 Alpha, Beta, num1, num2, num3;
+    Alpha = _mm_set_ps(alpha, alpha, alpha, alpha);
+    Beta = _mm_set_ps(Beta, Beta, Beta, Beta);
+
+    for (i = 0; i < M; i+=4) {
+
+        num1 = _mm_load_ps(&y[i]);
+        num2 = _mm_load_ps(&z[i]);
+        num1 = _mm_mul_ps(num1, Alpha);
+        num2 = _mm_mul_ps(num2, Beta);
+        num3 = _mm_add_ps(num1, num2);
+        _mm_store_ps(&y[i], num3);
+    }
+
+
+}
+
 
 
 
