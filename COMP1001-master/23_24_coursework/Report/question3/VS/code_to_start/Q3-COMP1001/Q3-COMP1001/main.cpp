@@ -42,6 +42,7 @@ int M, N; // Variables to store image dimensions
 //unsigned char frame1[N * M];//input image
 //unsigned char filt[N * M];//output filtered image
 //unsigned char gradient[N * M];//output image
+
 unsigned char* frame1, * filt, * gradient;
 
 
@@ -70,53 +71,43 @@ char header[100];
 errno_t err;
 
 
-int main(int argc, char* argv[]) {
-
-	if (argc == 4) {
-
-		read_image(argv[1]);
-		Gaussian_Blur();
-		Sobel();
-		write_image2(argv[2], filt);
-		write_image2(argv[3], gradient);
-	
-	return 0;
-	} else if (argc == 1) {
+int main() {
 
 
+		// Define the paths for input and output images
 		char input[200];
-		char path[200] = "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\input_images\\a";
-		char pathOut1[200] = "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\output_images\\blurred";
-		char pathOut2[200] = "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\output_images\\edge_detection";
+		char path[200] = "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\input_images\\a";	// Base path for input images
+		char pathOut1[200] = "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\output_images\\blurred";	// Base path for output blurred images
+		char pathOut2[200] = "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\output_images\\edge_detection";	// Base path for output edge detected images
 		
-		size_t inputSize = sizeof(input);
-		char format[5] = ".pgm";
-		int counter = 0;
+		size_t inputSize = sizeof(input);	// Size of the input buffer
+		char format[5] = ".pgm";	// File format extension
+		int counter = 0;	// Counter to iterate through images
 		
 		
-		
+		// Loop to process multiple images
 		for (int i = 0; i <= 30; i++) {
 			
+			// Construct the full path for the current input image
 			snprintf(input ,inputSize, "%s%d", path, counter);
-			
+			strcat_s(input, inputSize, format);	// Append file format to the input path
 
-			strcat_s(input, inputSize, format);
-
-			read_image(input); // Read image from the first argument
+			read_image(input); // Read the current image
 
 			Gaussian_Blur(); // Blur the image (reduce noise)
 			Sobel(); // Apply edge detection
 
-			
+
+			// Construct file names for the output images
 			char out1[200], out2[200];
 			snprintf(out1, sizeof(out1), "%s%d%s", pathOut1, counter, format); // Construct output file name for blurred image
 			snprintf(out2, sizeof(out2), "%s%d%s", pathOut2, counter, format); // Construct output file name for edge detection image
 
-			write_image2(out1, filt); // Store output blurred image to the second argument path
-			write_image2(out2, gradient); // Store output edge detected image to the third argument path
-			counter++;
+			write_image2(out1, filt); // Write the blurred image to disk
+			write_image2(out2, gradient); // Write the edge detected image to disk
+			counter++;// Increment counter for the next image
 		}
-	}
+	
 	return 0;
 }
 
@@ -302,11 +293,26 @@ void openfile(const char* filename, FILE** finput)
 
 //CRITICAL POINT: you can define your routines here that create the arrays dynamically; now, the arrays are defined statically.
 	
+// Function: allocateImageArrays
+// Purpose: Dynamically allocate memory for image processing arrays.
+// Parameters:
+//   - unsigned char** frame1: Pointer to a pointer for the input image array.
+//   - unsigned char** filt: Pointer to a pointer for the filtered image array.
+//   - unsigned char** gradient: Pointer to a pointer for the gradient image array.
+//   - int M: Width of the image.
+//   - int N: Height of the image.
 void allocateImageArrays(unsigned char** frame1, unsigned char** filt, unsigned char** gradient, int M, int N) {
+
+	// Size is the product of width (M), height (N), and the size of an unsigned char.
 	*frame1 = (unsigned char*)malloc(M * N * sizeof(unsigned char));
+
+	// Allocate memory for the filtered image array.
 	*filt = (unsigned char*)malloc(M * N * sizeof(unsigned char));
+
+	// Allocate memory for the gradient image array.
 	*gradient = (unsigned char*)malloc(M * N * sizeof(unsigned char));
 
+	// If any of the pointers is NULL, allocation failed.
 	if (*frame1 == NULL || *filt == NULL || *gradient == NULL) {
 		// Handle memory allocation failure
 		fprintf(stderr, "Memory allocation failed\n");
