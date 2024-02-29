@@ -25,6 +25,7 @@ void write_image2(const char* filename, unsigned char* output_image);
 void openfile(const char* filename, FILE** finput);
 int getint(FILE* fp);
 void allocateImageArrays(unsigned char** frame1, unsigned char** filt, unsigned char** gradient, int M, int N);
+void Sobel_SSE();
 
 //CRITICAL POINT: images' paths - You need to change these paths
 #define IN "C:\\Users\\mohd2\\Documents\\Comp1001\\github_fork\\COMP1001\\COMP1001-master\\23_24_coursework\\Report\\question3\\VS\\code_to_start\\input_images\\a0.pgm"
@@ -95,8 +96,8 @@ int main() {
 			read_image(input); // Read the current image
 
 			Gaussian_Blur(); // Blur the image (reduce noise)
-			Sobel(); // Apply edge detection
-
+			//Sobel(); // Apply edge detection
+			Sobel_SSE();
 
 			// Construct file names for the output images
 			char out1[200], out2[200];
@@ -148,19 +149,20 @@ void Gaussian_Blur() {
 }
 
 
-void Sobel() {
+/*void Sobel() {
 
 	int row, col, rowOffset, colOffset;
 	int Gx, Gy;
 
-	/*---------------------------- Determine edge directions and gradient strengths -------------------------------------------*/
+	
 	for (row = 1; row < N - 1; row++) {
 		for (col = 1; col < M - 1; col++) {
 
 			Gx = 0;
 			Gy = 0;
 
-			/* Calculate the sum of the Sobel mask times the nine surrounding pixels in the x and y direction */
+			
+
 			for (rowOffset = -1; rowOffset <= 1; rowOffset++) {
 				for (colOffset = -1; colOffset <= 1; colOffset++) {
 
@@ -169,7 +171,7 @@ void Sobel() {
 				}
 			}
 
-			gradient[M * row + col] = (unsigned char)sqrt(Gx * Gx + Gy * Gy); /* Calculate gradient strength		*/
+			gradient[M * row + col] = (unsigned char)sqrt(Gx * Gx + Gy * Gy); /* Calculate gradient strength		
 			//gradient[row][col] = abs(Gx) + abs(Gy); // this is an optimized version of the above
 
 		}
@@ -177,9 +179,95 @@ void Sobel() {
 
 
 }
+*/
 
+void Sobel_SSE() {
+	int row, col; // Variables to keep track of the current row and column in the image
 
+	// Variables to hold the gradient in x and y directions for a block of pixels
+	__m128i Gx, Gy;
 
+	__m128i sum; // Variable to store the sum of gradients for a block of pixels
+
+	// Masks for computing the x-gradient. These are like filters applied over the image data
+	__m128i mask_x0, mask_x1, mask_x2;
+
+	// Masks for computing the y-gradient. Similar to x-gradient masks, but for vertical edges
+	__m128i mask_y0, mask_y1, mask_y2;
+
+	// Set up the masks with specific values. These values are used in edge detection
+	// _mm_setr_epi8 is a special function that helps set these values
+	mask_x0 = _mm_setr_epi8(-1, 0, 1, -2, 0, 2, -1, 0, 1, 0, 0, 0, 0, 0, 0, 0);
+	mask_x1 = _mm_setr_epi8(-2, 0, 2, -1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	mask_x2 = _mm_setr_epi8(-1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	mask_y0 = _mm_setr_epi8(-1, -2, -1, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0);
+	mask_y1 = _mm_setr_epi8(0, 0, 0, -1, -2, -1, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0);
+	mask_y2 = _mm_setr_epi8(1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+	// Loop through each row of the image, but skip the first and last row
+	for (row = 1; row < N - 1; row++) {
+		// Loop through each column in steps of 16 (because we process 16 pixels at a time)
+		for (col = 0; col <= M - 16; col += 16) {
+			// Load data for the current and neighboring rows into special variables (data0, data1, data2)
+		   // These variables can hold more data than usual because of SSE (SIMD)
+			__m128i data0 = _mm_loadu_si128((__m128i*)(filt + M * (row - 1) + col));
+			__m128i data1 = _mm_loadu_si128((__m128i*)(filt + M * row + col));
+			__m128i data2 = _mm_loadu_si128((__m128i*)(filt + M * (row + 1) + col));
+
+			// Compute the gradient in the x direction (Gx) by applying the masks to the image data
+		   // This is like measuring how sharp the change is in the horizontal direction
+			Gx = _mm_add_epi16(
+				_mm_add_epi16(
+					_mm_maddubs_epi16(data0, mask_x0),
+					_mm_maddubs_epi16(data1, mask_x1)),
+				_mm_maddubs_epi16(data2, mask_x2));
+
+			// Compute the gradient in the y direction (Gy) by applying the masks to the image data
+			Gy = _mm_add_epi16(
+				_mm_add_epi16(
+					_mm_maddubs_epi16(data0, mask_y0),
+					_mm_maddubs_epi16(data1, mask_y1)),
+				_mm_maddubs_epi16(data2, mask_y2));
+
+			// Add up the absolute values of Gx and Gy to get the total gradient
+			sum = _mm_add_epi16(_mm_abs_epi16(Gx), _mm_abs_epi16(Gy));
+
+			// Scale down the sum to fit into an 8-bit number (like a regular grayscale pixel value)
+			// This is because the gradient might be a large number, and we want to store it as a pixel value
+			__m128i maxVal = _mm_set1_epi16(1448);
+			// Approximate division by 1448 to scale the value
+			sum = _mm_mulhrs_epi16(sum, _mm_set1_epi16((short)((1 << 15) / 1448)));
+
+			// Store the scaled gradient sum in the gradient array for the image
+			_mm_storeu_si128((__m128i*)(gradient + M * row + col), sum);
+
+			// For any remaining pixels in the row that were not processed in the block of 16,
+			// we calculate the gradient using a regular method (non-SSE)
+			for (; col < M; col++) {
+				int Gx_scalar = 0, Gy_scalar = 0;
+				// Compute gradients for each individual pixel
+				for (int i = -1; i <= 1; i++) {
+					for (int j = -1; j <= 1; j++) {
+						int pixelX = col + j;
+						int pixelY = row + i;
+						// Check for valid pixel coordinates
+						if (pixelX >= 0 && pixelX < M && pixelY >= 0 && pixelY < N) {
+							// Compute scalar gradients
+							Gx_scalar += filt[M * pixelY + pixelX] * GxMask[i + 1][j + 1];
+							Gy_scalar += filt[M * pixelY + pixelX] * GyMask[i + 1][j + 1];
+						}
+					}
+				}
+				// Compute the magnitude of the gradient
+				int magnitude = abs(Gx_scalar) + abs(Gy_scalar);
+				// Clamp magnitude to 255
+				magnitude = magnitude > 255 ? 255 : magnitude;
+				// Store the magnitude in the gradient array
+				gradient[M * row + col] = (unsigned char)magnitude;
+			}
+		}
+	}
+}
 
 void read_image(const char* filename)
 {
